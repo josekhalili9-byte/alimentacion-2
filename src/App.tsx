@@ -31,7 +31,25 @@ export default function App() {
 
   // Save history to local storage whenever it changes
   useEffect(() => {
-    localStorage.setItem('foodscan_history', JSON.stringify(history));
+    try {
+      localStorage.setItem('foodscan_history', JSON.stringify(history));
+    } catch (e) {
+      if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+        console.warn("LocalStorage quota exceeded, pruning history...");
+        // Prune: Keep only the 10 most recent items if quota is hit
+        if (history.length > 10) {
+          const prunedHistory = history.slice(0, 10);
+          setHistory(prunedHistory);
+          try {
+            localStorage.setItem('foodscan_history', JSON.stringify(prunedHistory));
+          } catch (retryError) {
+            console.error("Failed to save even pruned history", retryError);
+          }
+        }
+      } else {
+        console.error("Failed to save history", e);
+      }
+    }
   }, [history]);
 
   const handleCapture = async (base64Image: string, mimeType: string) => {

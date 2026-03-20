@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Camera, Image as ImageIcon, X } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -12,19 +12,64 @@ export default function CameraScanner({ onCapture }: CameraScannerProps) {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
   const startCamera = async () => {
     setCameraError(null);
     try {
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('NotSupportedError');
+      }
+
+      // Check permission status if API is available
+      if (navigator.permissions && (navigator.permissions as any).query) {
+        try {
+          const status = await (navigator.permissions as any).query({ name: 'camera' });
+          if (status.state === 'denied') {
+            setCameraError("Acceso bloqueado. Por favor, haz clic en el icono del candado 🔒 en la barra de direcciones y cambia el permiso de cámara a 'Permitir'.");
+            return;
+          }
+        } catch (e) {
+          // Ignore permission query errors
+        }
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
+        video: { 
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
       });
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        setIsCameraActive(true);
+        // Wait for video to be ready
+        videoRef.current.onloadedmetadata = () => {
+          setIsCameraActive(true);
+        };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error accessing camera:", err);
-      setCameraError("No se pudo acceder a la cámara. Por favor, sube una foto.");
+      
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraError("Permiso denegado. Por favor, permite el acceso a la cámara en la configuración de tu navegador y recarga la página.");
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError' || err.message === 'NotSupportedError') {
+        setCameraError("No se encontró ninguna cámara o tu navegador no es compatible.");
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        setCameraError("La cámara está siendo usada por otra aplicación.");
+      } else {
+        setCameraError("Error al acceder a la cámara. Por favor, intenta subir una foto.");
+      }
     }
   };
 
@@ -38,17 +83,47 @@ export default function CameraScanner({ onCapture }: CameraScannerProps) {
   }, []);
 
   const capturePhoto = () => {
-    if (videoRef.current) {
+    if (videoRef.current && videoRef.current.readyState === 4) {
+      const video = videoRef.current;
       const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      
+      // Resize logic to prevent QuotaExceededError in localStorage
+      const MAX_DIMENSION = 800;
+      let width = video.videoWidth;
+      let height = video.videoHeight;
+
+      if (width > height) {
+        if (width > MAX_DIMENSION) {
+          height *= MAX_DIMENSION / width;
+          width = MAX_DIMENSION;
+        }
+      } else {
+        if (height > MAX_DIMENSION) {
+          width *= MAX_DIMENSION / height;
+          height = MAX_DIMENSION;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0);
-        const base64Image = canvas.toDataURL('image/jpeg');
-        stopCamera();
-        onCapture(base64Image, 'image/jpeg');
+        // Draw the current frame resized
+        ctx.drawImage(video, 0, 0, width, height);
+        
+        try {
+          // Lower quality to 0.7 to save space
+          const base64Image = canvas.toDataURL('image/jpeg', 0.7);
+          stopCamera();
+          onCapture(base64Image, 'image/jpeg');
+        } catch (e) {
+          console.error("Error capturing image data:", e);
+          setCameraError("Error al procesar la imagen. Intenta de nuevo.");
+        }
       }
+    } else {
+      setCameraError("La cámara no está lista. Por favor espera un momento.");
     }
   };
 
@@ -138,7 +213,20 @@ export default function CameraScanner({ onCapture }: CameraScannerProps) {
       </div>
 
       {cameraError && (
-        <p className="mt-4 text-red-500 text-sm">{cameraError}</p>
+        <div className="mt-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-center">
+          <p className="text-red-600 text-sm mb-4 font-medium">{cameraError}</p>
+          <div className="flex flex-col gap-2">
+            <button 
+              onClick={startCamera}
+              className="text-emerald-600 text-sm font-semibold hover:underline"
+            >
+              Intentar de nuevo
+            </button>
+            <p className="text-slate-400 text-xs italic">
+              Tip: Haz clic en el icono del candado 🔒 en la barra de direcciones para habilitar la cámara.
+            </p>
+          </div>
+        </div>
       )}
     </motion.div>
   );

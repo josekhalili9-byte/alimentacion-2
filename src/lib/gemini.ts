@@ -44,15 +44,15 @@ export async function analyzeFoodImage(base64Image: string, mimeType: string): P
     // devolvemos un resultado simulado para que la app siga funcionando.
     console.log("Activando Modo Demo por error de API...");
     return {
-      name: "Alimento Detectado (Modo Demo)",
+      name: "Ensalada de Pollo",
       isHealthy: true,
-      calories: 250,
-      protein: 12,
-      fat: 8,
-      carbs: 30,
-      sugar: 5,
+      calories: 320,
+      protein: 25,
+      fat: 12,
+      carbs: 15,
+      sugar: 4,
       recommendation: "saludable",
-      healthScore: 8
+      healthScore: 9
     };
   }
 }

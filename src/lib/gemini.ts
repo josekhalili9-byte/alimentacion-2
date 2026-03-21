@@ -6,7 +6,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 export async function analyzeFoodImage(base64Image: string, mimeType: string): Promise<Omit<FoodAnalysis, 'id' | 'date' | 'imageUrl'>> {
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview',
+      model: 'gemini-2.5-flash-image',
       contents: [
         {
           inlineData: {

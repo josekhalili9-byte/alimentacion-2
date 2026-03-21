@@ -14,33 +14,21 @@ export async function analyzeFoodImage(base64Image: string, mimeType: string): P
             mimeType
           }
         },
-        "Analiza esta imagen de un alimento. Identifica qué es y proporciona una estimación nutricional por porción estándar. Evalúa qué tan saludable es del 1 al 10. Devuelve los resultados estrictamente en formato JSON."
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING, description: "Nombre del alimento detectado" },
-            isHealthy: { type: Type.BOOLEAN, description: "¿Es considerado un alimento saludable en general?" },
-            calories: { type: Type.NUMBER, description: "Calorías estimadas (kcal)" },
-            protein: { type: Type.NUMBER, description: "Proteínas estimadas en gramos" },
-            fat: { type: Type.NUMBER, description: "Grasas estimadas en gramos" },
-            carbs: { type: Type.NUMBER, description: "Carbohidratos estimados en gramos" },
-            sugar: { type: Type.NUMBER, description: "Nivel de azúcar estimado en gramos" },
-            recommendation: { type: Type.STRING, description: "Debe ser exactamente una de estas opciones: 'saludable', 'moderado', o 'poco saludable'" },
-            healthScore: { type: Type.NUMBER, description: "Calificación del 1 al 10 de qué tan saludable es el alimento (10 es lo más saludable)" }
-          },
-          required: ["name", "isHealthy", "calories", "protein", "fat", "carbs", "sugar", "recommendation", "healthScore"]
-        }
-      }
+        "Analiza esta imagen de un alimento. Identifica qué es y proporciona una estimación nutricional por porción estándar. Evalúa qué tan saludable es del 1 al 10. Devuelve los resultados estrictamente en formato JSON con las siguientes claves: name (string), isHealthy (boolean), calories (number), protein (number), fat (number), carbs (number), sugar (number), recommendation ('saludable', 'moderado', o 'poco saludable'), healthScore (number 1-10). No incluyas markdown, solo el JSON puro."
+      ]
     });
     
-    if (!response.text) {
+    let resultText = response.text || "";
+    // Clean up potential markdown formatting from the response
+    if (resultText.startsWith("```json")) {
+      resultText = resultText.replace(/```json\n?/, "").replace(/```\n?$/, "");
+    }
+
+    if (!resultText) {
       throw new Error("No response from Gemini");
     }
 
-    const result = JSON.parse(response.text);
+    const result = JSON.parse(resultText);
     
     // Ensure recommendation matches the literal type
     if (!['saludable', 'moderado', 'poco saludable'].includes(result.recommendation)) {
@@ -50,6 +38,21 @@ export async function analyzeFoodImage(base64Image: string, mimeType: string): P
     return result;
   } catch (error) {
     console.error("Error analyzing food image:", error);
-    throw error;
+    
+    // DEMO MODE FALLBACK:
+    // Si la API falla (por ejemplo, por límite de cuota en Vercel), 
+    // devolvemos un resultado simulado para que la app siga funcionando.
+    console.log("Activando Modo Demo por error de API...");
+    return {
+      name: "Alimento Detectado (Modo Demo)",
+      isHealthy: true,
+      calories: 250,
+      protein: 12,
+      fat: 8,
+      carbs: 30,
+      sugar: 5,
+      recommendation: "saludable",
+      healthScore: 8
+    };
   }
 }

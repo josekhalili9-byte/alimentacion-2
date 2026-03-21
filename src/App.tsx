@@ -67,8 +67,9 @@ export default function App() {
 
       setCurrentScan(newScan);
       setHistory(prev => [newScan, ...prev]);
-    } catch (err) {
-      setError("Hubo un error al analizar el alimento. Por favor, intenta de nuevo.");
+    } catch (err: any) {
+      const errorMessage = err?.message || "Error desconocido";
+      setError(`Hubo un error al analizar el alimento: ${errorMessage}. Por favor, intenta de nuevo.`);
       console.error(err);
     } finally {
       setIsScanning(false);
